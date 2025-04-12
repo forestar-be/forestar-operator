@@ -46,9 +46,17 @@ const AuthProvider = ({ children }: any) => {
     });
     if (!response.ok) {
       try {
-        const res = await response.json();
-        if (res.message) {
-          return { success: false, message: res.message };
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const res = await response.json();
+          if (res.message) {
+            return { success: false, message: res.message };
+          }
+        } else {
+          const res = await response.text();
+          if (res) {
+            return { success: false, message: res };
+          }
         }
       } catch (error) {
         console.log(error);
