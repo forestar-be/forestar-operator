@@ -20,6 +20,7 @@ import CameraAltIcon from '@mui/icons-material/CameraAlt';
 import imageCompression from 'browser-image-compression';
 import { useAuth } from '../hooks/AuthProvider';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
+import { authorizedFetch } from '../hooks/session';
 
 interface Config {
   id: string;
@@ -60,11 +61,10 @@ const DynamicForm = () => {
   useEffect(() => {
     const fetchOptions = async () => {
       try {
-        const response = await fetch(`${API_URL}/operator/optionsListByName`, {
-          headers: {
-            Authorization: `Bearer ${auth.token}`,
-          },
-        });
+        const response = await authorizedFetch(
+          auth.token,
+          `${API_URL}/operator/optionsListByName`,
+        );
 
         // check if status 401 or 403
         if (response.status === 401 || response.status === 403) {
@@ -86,11 +86,10 @@ const DynamicForm = () => {
 
     const fetchFormConfig = async () => {
       try {
-        const response = await fetch(`${API_URL}/operator/formConfig`, {
-          headers: {
-            Authorization: `Bearer ${auth.token}`,
-          },
-        });
+        const response = await authorizedFetch(
+          auth.token,
+          `${API_URL}/operator/formConfig`,
+        );
 
         // check if status 401 or 403
         if (response.status === 401 || response.status === 403) {
@@ -241,13 +240,13 @@ const DynamicForm = () => {
 
     try {
       setLoadingSubmit(true);
-      const response = await fetch(`${API_URL}/operator/submit`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${auth.token}`,
-        },
-        body: formDataToSend,
-      });
+      // `authorizedFetch` ne pose pas de `Content-Type` : le navigateur doit
+      // écrire lui-même la frontière multipart de `FormData`.
+      const response = await authorizedFetch(
+        auth.token,
+        `${API_URL}/operator/submit`,
+        { method: 'POST', body: formDataToSend },
+      );
 
       // check if status 401 or 403
       if (response.status === 401 || response.status === 403) {
