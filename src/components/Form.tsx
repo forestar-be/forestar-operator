@@ -112,7 +112,7 @@ const DynamicForm = () => {
 
     fetchOptions();
     fetchFormConfig();
-  }, []);
+  }, [auth]);
 
   const handleChange = (
     event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
@@ -532,7 +532,7 @@ const DynamicForm = () => {
           {imagePreviewUrl && (
             <img
               src={imagePreviewUrl}
-              alt="Image Preview"
+              alt="Aperçu de la prise"
               style={{
                 width: '100%',
                 maxHeight: '400px',
