@@ -21,6 +21,24 @@ export const API_URL = process.env.REACT_APP_API_URL ?? '';
 export const SSO_ENABLED = process.env.REACT_APP_AUTH_MODE === 'oidc';
 
 /**
+ * Valeur de `useAuth().token` en mode SSO.
+ *
+ * Ce n'est pas un jeton : aucun secret n'atteint le JavaScript, c'est tout
+ * l'objet du programme. C'est une **sentinelle non vide**, et elle existe
+ * parce que le code hérité se sert de `token` comme synonyme de « connecté »
+ * bien plus souvent que pour construire un en-tête `Authorization` — 134
+ * endroits contre 13, comptés le 2026-09-06. Avec une chaîne vide, tous ces
+ * tests devenaient faux : menus et boutons disparaissaient, des chargements
+ * ne partaient jamais, et `AppShell` de forestar-robot renvoyait `null`, donc
+ * une page entièrement blanche sur une session parfaitement valide.
+ *
+ * Corollaire indispensable : **aucun en-tête `Authorization` ne doit être
+ * construit à partir de cette valeur**. Tous les points qui le font sont
+ * gardés par `SSO_ENABLED`.
+ */
+export const SSO_SESSION_TOKEN = 'sso-cookie-session';
+
+/**
  * Rôles admis. Le serveur reste l'autorité — la matrice R005 protège
  * `/operator` — mais refuser ici évite d'afficher une interface complète à
  * quelqu'un dont chaque appel repartira en 403.
@@ -54,7 +72,8 @@ export function getSessionClient(): SessionClient {
  * Appel authentifié, quel que soit le mode.
  *
  * En mode historique, l'en-tête `Authorization` porte le jeton, comme avant.
- * En mode SSO, `token` est vide : l'en-tête disparaît, le cookie `__Host-`
+ * En mode SSO, `token` vaut une sentinelle non vide et l'en-tête est retiré
+ * par la garde `SSO_ENABLED` : le cookie `__Host-`
  * part avec la requête et les mutations portent le jeton CSRF.
  */
 export function authorizedFetch(
@@ -64,7 +83,13 @@ export function authorizedFetch(
 ): Promise<Response> {
   const method = init.method ?? 'GET';
   const headers: Record<string, string> = {
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    // `SSO_ENABLED` et pas seulement la vérité de `token` : depuis le
+    // 2026-09-06 celui-ci vaut une sentinelle non vide en mode SSO, pour
+    // que les tests `if (!token)` du code hérité restent justes. Sans
+    // cette garde, la sentinelle partirait en en-tête `Authorization`.
+    ...(!SSO_ENABLED && token
+      ? { Authorization: `Bearer ${token}` }
+      : {}),
     ...((init.headers as Record<string, string>) ?? {}),
   };
 
