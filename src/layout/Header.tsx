@@ -15,6 +15,7 @@ import ColorModeContext from '../utils/ColorModeContext';
 import headerData from '../config/header.json';
 import { Logo } from '../components/Logo';
 import { useAuth } from '../hooks/AuthProvider';
+import AccountMenu from '../components/AccountMenu';
 
 interface Props {
   onSidebarOpen: () => void;
@@ -73,15 +74,19 @@ const Header = ({ onSidebarOpen }: Props): JSX.Element => {
           ></Box>
           {auth.token && (
             <Box sx={{ display: 'flex' }}>
-              <IconButton
-                onClick={auth.logOut}
-                aria-label="Déconnexion"
-                color={theme.palette.mode === 'dark' ? 'warning' : 'inherit'}
-              >
-                <Tooltip title="Déconnexion">
-                  <LogoutIcon fontSize="medium" />
-                </Tooltip>
-              </IconButton>
+              {auth.ssoEnabled ? (
+                <AccountMenu />
+              ) : (
+                <IconButton
+                  onClick={auth.logOut}
+                  aria-label="Déconnexion"
+                  color={theme.palette.mode === 'dark' ? 'warning' : 'inherit'}
+                >
+                  <Tooltip title="Déconnexion">
+                    <LogoutIcon fontSize="medium" />
+                  </Tooltip>
+                </IconButton>
+              )}
             </Box>
           )}
           <Divider
