@@ -11,16 +11,22 @@ import {
   CircularProgress,
   FormControlLabel,
   Checkbox,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
 import '../styles/Form.css';
 import { useTheme } from '@mui/material/styles';
 import SignatureCanvas from 'react-signature-canvas';
 import DeleteIcon from '@mui/icons-material/Delete';
 import CameraAltIcon from '@mui/icons-material/CameraAlt';
+import PrintIcon from '@mui/icons-material/Print';
 import imageCompression from 'browser-image-compression';
 import { useAuth } from '../hooks/AuthProvider';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import { authorizedFetch } from '../hooks/session';
+import { printHtml } from '../utils/printHtml';
 
 interface Config {
   id: string;
@@ -52,6 +58,15 @@ const DynamicForm = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [loadingImage, setLoadingImage] = useState(false);
   const [loadingSubmit, setLoadingSubmit] = useState(false);
+  // R004-S03 — boîte de confirmation après l'envoi, avec impression des
+  // tickets 80 mm. `confirmedRepairId` remplace l'ancien `alert`.
+  const [confirmedRepairId, setConfirmedRepairId] = useState<number | null>(
+    null,
+  );
+  const [printingTickets, setPrintingTickets] = useState(false);
+  const [printTicketsError, setPrintTicketsError] = useState<string | null>(
+    null,
+  );
   const signaturePadRef = useRef<SignatureCanvas>(null);
   const [optionsListByName, setOptionsListByName] = useState<
     Record<string, string[]>
@@ -260,13 +275,53 @@ const DynamicForm = () => {
 
       const result = await response.json();
       console.log('Form data submitted successfully:', result);
-      alert('Formulaire envoyé avec succès');
-      handleNewForm(true);
+      setPrintTicketsError(null);
+      setConfirmedRepairId(result.newRepair.id);
     } catch (error) {
       alert("Erreur lors de l'envoi du formulaire");
     } finally {
       setLoadingSubmit(false);
     }
+  };
+
+  // R004-S03 — récupère le gabarit HTML des deux tickets (D-11) et déclenche
+  // l'impression. Un échec de chargement laisse la boîte ouverte : on peut
+  // réessayer sans réencoder la fiche.
+  const handlePrintTickets = async () => {
+    if (confirmedRepairId === null) return;
+    setPrintTicketsError(null);
+    setPrintingTickets(true);
+    try {
+      const response = await authorizedFetch(
+        auth.token,
+        `${API_URL}/operator/machine-repairs/${confirmedRepairId}/ticket`,
+      );
+
+      if (response.status === 401 || response.status === 403) {
+        auth.logOut();
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+
+      const html = await response.text();
+      await printHtml(html);
+    } catch (error) {
+      console.error('Error printing tickets:', error);
+      setPrintTicketsError(
+        "Impossible de charger les tickets. Vérifiez la connexion et réessayez.",
+      );
+    } finally {
+      setPrintingTickets(false);
+    }
+  };
+
+  const handleConfirmationClose = () => {
+    setConfirmedRepairId(null);
+    setPrintTicketsError(null);
+    handleNewForm(true);
   };
 
   const renderField = (field: any) => {
@@ -544,6 +599,38 @@ const DynamicForm = () => {
           </Button>
         </Box>
       </Modal>
+
+      {/* R004-S03 — confirmation d'envoi, avec impression des tickets 80 mm */}
+      <Dialog open={confirmedRepairId !== null} disableEscapeKeyDown>
+        <DialogTitle>
+          Fiche n° {confirmedRepairId} enregistrée
+        </DialogTitle>
+        <DialogContent>
+          {printTicketsError && (
+            <Typography color="error" sx={{ mt: 1 }}>
+              {printTicketsError}
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={
+              printingTickets ? (
+                <CircularProgress size={16} color="inherit" />
+              ) : (
+                <PrintIcon />
+              )
+            }
+            onClick={() => void handlePrintTickets()}
+            disabled={printingTickets}
+          >
+            Imprimer les tickets
+          </Button>
+          <Button onClick={handleConfirmationClose}>Nouveau formulaire</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
