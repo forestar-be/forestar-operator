@@ -302,6 +302,10 @@ const ClientBlock: React.FC<ClientBlockProps> = ({
     <Box>
       <TextField
         fullWidth
+        // `type="search"` : Bitwarden ignore ces champs, et Chrome n'y propose
+        // ni identifiant ni adresse. `data-bwignore` ne suffit pas : Bitwarden
+        // ne le lit que si l'utilisateur l'a activé dans ses réglages.
+        type="search"
         inputProps={noAutofillInputProps}
         label="Rechercher un client existant"
         placeholder="Nom, téléphone ou email"
