@@ -23,6 +23,7 @@ import {
   type ClientSearchResult,
   type PublicClient,
 } from '../api/operatorClients';
+import { noAutofillInputProps } from '../utils/noAutofill';
 
 interface FieldConfig {
   id: string;
@@ -47,7 +48,9 @@ const SEARCH_DEBOUNCE_MS = 300;
 const MIN_QUERY_LENGTH = 2;
 
 function clientLabel(client: PublicClient): string {
-  return `${client.firstName} ${client.lastName}`.trim() || `Client n° ${client.id}`;
+  return (
+    `${client.firstName} ${client.lastName}`.trim() || `Client n° ${client.id}`
+  );
 }
 
 /** Coordonnées d'un client, sous les ids du formulaire (pour préremplir l'édition). */
@@ -215,6 +218,7 @@ const ClientBlock: React.FC<ClientBlockProps> = ({
               <Grid item xs={12} sm={6} key={field.id}>
                 <TextField
                   fullWidth
+                  inputProps={noAutofillInputProps}
                   label={field.label}
                   value={editValues[field.id as keyof ClientFormInput] ?? ''}
                   onChange={(event) =>
@@ -244,7 +248,11 @@ const ClientBlock: React.FC<ClientBlockProps> = ({
             >
               {saving ? 'Enregistrement…' : 'Enregistrer'}
             </Button>
-            <Button variant="outlined" onClick={handleCancelEdit} disabled={saving}>
+            <Button
+              variant="outlined"
+              onClick={handleCancelEdit}
+              disabled={saving}
+            >
               Annuler
             </Button>
           </Box>
@@ -256,7 +264,9 @@ const ClientBlock: React.FC<ClientBlockProps> = ({
   if (selectedClient) {
     const addressLine = [
       selectedClient.address,
-      [selectedClient.postalCode, selectedClient.city].filter(Boolean).join(' '),
+      [selectedClient.postalCode, selectedClient.city]
+        .filter(Boolean)
+        .join(' '),
     ]
       .filter(Boolean)
       .join(' — ');
@@ -272,7 +282,9 @@ const ClientBlock: React.FC<ClientBlockProps> = ({
           {selectedClient.email && (
             <Typography variant="body2">{selectedClient.email}</Typography>
           )}
-          {addressLine && <Typography variant="body2">{addressLine}</Typography>}
+          {addressLine && (
+            <Typography variant="body2">{addressLine}</Typography>
+          )}
           <Box sx={{ mt: 2, display: 'flex', gap: 1 }}>
             <Button variant="outlined" onClick={handleChangeClient}>
               Changer de client
@@ -290,6 +302,7 @@ const ClientBlock: React.FC<ClientBlockProps> = ({
     <Box>
       <TextField
         fullWidth
+        inputProps={noAutofillInputProps}
         label="Rechercher un client existant"
         placeholder="Nom, téléphone ou email"
         value={query}
@@ -318,7 +331,10 @@ const ClientBlock: React.FC<ClientBlockProps> = ({
           }}
         >
           {results.map((client) => (
-            <ListItemButton key={client.id} onClick={() => onSelectClient(client)}>
+            <ListItemButton
+              key={client.id}
+              onClick={() => onSelectClient(client)}
+            >
               <ListItemText
                 primary={clientLabel(client)}
                 secondary={[

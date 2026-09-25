@@ -44,6 +44,7 @@ import {
   type ClientSearchResult,
   type PublicClient,
 } from '../api/operatorClients';
+import { noAutofillInputProps } from '../utils/noAutofill';
 
 interface Config {
   id: string;
@@ -484,7 +485,7 @@ const DynamicForm = () => {
     } catch (error) {
       console.error('Error printing tickets:', error);
       setPrintTicketsError(
-        "Impossible de charger les tickets. Vérifiez la connexion et réessayez.",
+        'Impossible de charger les tickets. Vérifiez la connexion et réessayez.',
       );
     } finally {
       setPrintingTickets(false);
@@ -512,6 +513,7 @@ const DynamicForm = () => {
             fullWidth
             onChange={handleChange}
             value={formData[field.id] || ''}
+            inputProps={noAutofillInputProps}
             inputRef={(el: HTMLInputElement | null) => {
               fieldRefs.current[field.id] = el;
             }}
@@ -810,9 +812,7 @@ const DynamicForm = () => {
 
       {/* R004-S03 — confirmation d'envoi, avec impression des tickets 80 mm */}
       <Dialog open={confirmedRepairId !== null} disableEscapeKeyDown>
-        <DialogTitle>
-          Fiche n° {confirmedRepairId} enregistrée
-        </DialogTitle>
+        <DialogTitle>Fiche n° {confirmedRepairId} enregistrée</DialogTitle>
         <DialogContent>
           {printTicketsError && (
             <Typography color="error" sx={{ mt: 1 }}>
