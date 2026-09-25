@@ -14,7 +14,12 @@ import {
 } from '@mui/material';
 import PersonSearchIcon from '@mui/icons-material/PersonSearch';
 import {
+  ClientConflictApiError,
   searchOperatorClients,
+  updateOperatorClient,
+  UnauthorizedError,
+  type ClientConflictField,
+  type ClientFormInput,
   type ClientSearchResult,
   type PublicClient,
 } from '../api/operatorClients';
@@ -45,11 +50,27 @@ function clientLabel(client: PublicClient): string {
   return `${client.firstName} ${client.lastName}`.trim() || `Client n° ${client.id}`;
 }
 
+/** Coordonnées d'un client, sous les ids du formulaire (pour préremplir l'édition). */
+function clientToFormInput(client: PublicClient): ClientFormInput {
+  return {
+    last_name: client.lastName,
+    first_name: client.firstName,
+    address: client.address,
+    postal_code: client.postalCode,
+    city: client.city,
+    phone: client.phone,
+    email: client.email,
+  };
+}
+
 /**
  * R008-S02 — Bloc Client en tête du formulaire : recherche d'un client
  * existant (AC-02), ou saisie d'un nouveau client (les champs de
  * `Formulaire Opérateur`). Un client choisi s'affiche en lecture, avec
- * « Changer de client » : la tablette ne le modifie jamais (D-22).
+ * « Changer de client » et « Modifier » : décision du PO du 2026-09-25, qui
+ * remplace D-22 (« la tablette ne modifie jamais un client existant ») —
+ * l'opérateur voit et peut corriger les coordonnées du client choisi. La
+ * modification vaut pour toutes les fiches du client (D-19).
  */
 const ClientBlock: React.FC<ClientBlockProps> = ({
   fields,
@@ -65,6 +86,16 @@ const ClientBlock: React.FC<ClientBlockProps> = ({
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
 
+  // Édition du client choisi (décision du PO du 2026-09-25, remplace D-22).
+  const [editing, setEditing] = useState(false);
+  const [editValues, setEditValues] = useState<ClientFormInput>({});
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveConflict, setSaveConflict] = useState<{
+    field: ClientConflictField;
+    client: PublicClient;
+  } | null>(null);
+
   // AC-06 — la remise à zéro du formulaire vide `selectedClient` depuis le
   // parent (sans passer par « Changer de client ») : la recherche revient
   // aussi à vide, plutôt que de garder d'anciens résultats affichés.
@@ -73,6 +104,9 @@ const ClientBlock: React.FC<ClientBlockProps> = ({
       setQuery('');
       setResults([]);
       setSearchError(null);
+      setEditing(false);
+      setSaveError(null);
+      setSaveConflict(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClient]);
@@ -120,6 +154,105 @@ const ClientBlock: React.FC<ClientBlockProps> = ({
     onSelectClient(null);
   };
 
+  const handleStartEdit = () => {
+    if (!selectedClient) return;
+    setEditValues(clientToFormInput(selectedClient));
+    setSaveError(null);
+    setSaveConflict(null);
+    setEditing(true);
+  };
+
+  const handleCancelEdit = () => {
+    setEditing(false);
+    setSaveError(null);
+    setSaveConflict(null);
+  };
+
+  const handleEditFieldChange = (id: string, value: string) => {
+    setEditValues((prev) => ({ ...prev, [id]: value }));
+    // Une nouvelle saisie sur le champ en cause efface le conflit affiché.
+    if (saveConflict && id === saveConflict.field) setSaveConflict(null);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!selectedClient) return;
+    setSaving(true);
+    setSaveError(null);
+    setSaveConflict(null);
+    try {
+      const updated = await updateOperatorClient(
+        apiUrl,
+        token,
+        selectedClient.id,
+        editValues,
+        onUnauthorized,
+      );
+      onSelectClient(updated);
+      setEditing(false);
+    } catch (error) {
+      if (error instanceof ClientConflictApiError) {
+        setSaveConflict({ field: error.field, client: error.client });
+      } else if (error instanceof UnauthorizedError) {
+        // `onUnauthorized` a déjà été déclenché par `parseAtelierResponse`.
+      } else {
+        console.error('Erreur lors de la modification du client:', error);
+        setSaveError('Erreur lors de la modification du client.');
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (selectedClient && editing) {
+    return (
+      <Card variant="outlined">
+        <CardContent>
+          <Typography variant="subtitle1" fontWeight={700} gutterBottom>
+            Modifier {clientLabel(selectedClient)}
+          </Typography>
+          <Grid container spacing={2}>
+            {fields.map((field) => (
+              <Grid item xs={12} sm={6} key={field.id}>
+                <TextField
+                  fullWidth
+                  label={field.label}
+                  value={editValues[field.id as keyof ClientFormInput] ?? ''}
+                  onChange={(event) =>
+                    handleEditFieldChange(field.id, event.target.value)
+                  }
+                  disabled={saving}
+                  error={saveConflict?.field === field.id}
+                  helperText={
+                    saveConflict?.field === field.id
+                      ? `Un client a déjà ${saveConflict.field === 'phone' ? 'ce téléphone' : 'cet email'} : ${clientLabel(saveConflict.client)}.`
+                      : undefined
+                  }
+                />
+              </Grid>
+            ))}
+          </Grid>
+          {saveError && (
+            <Typography color="error" variant="body2" sx={{ mt: 2 }}>
+              {saveError}
+            </Typography>
+          )}
+          <Box sx={{ mt: 2, display: 'flex', gap: 1 }}>
+            <Button
+              variant="contained"
+              onClick={handleSaveEdit}
+              disabled={saving}
+            >
+              {saving ? 'Enregistrement…' : 'Enregistrer'}
+            </Button>
+            <Button variant="outlined" onClick={handleCancelEdit} disabled={saving}>
+              Annuler
+            </Button>
+          </Box>
+        </CardContent>
+      </Card>
+    );
+  }
+
   if (selectedClient) {
     const addressLine = [
       selectedClient.address,
@@ -140,9 +273,14 @@ const ClientBlock: React.FC<ClientBlockProps> = ({
             <Typography variant="body2">{selectedClient.email}</Typography>
           )}
           {addressLine && <Typography variant="body2">{addressLine}</Typography>}
-          <Button sx={{ mt: 2 }} variant="outlined" onClick={handleChangeClient}>
-            Changer de client
-          </Button>
+          <Box sx={{ mt: 2, display: 'flex', gap: 1 }}>
+            <Button variant="outlined" onClick={handleChangeClient}>
+              Changer de client
+            </Button>
+            <Button variant="outlined" onClick={handleStartEdit}>
+              Modifier
+            </Button>
+          </Box>
         </CardContent>
       </Card>
     );

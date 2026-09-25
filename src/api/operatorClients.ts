@@ -156,6 +156,31 @@ export async function checkOperatorClient(
 }
 
 /**
+ * R008 — modification du client choisi, depuis la tablette (décision du PO du
+ * 2026-09-25 : remplace D-22, l'opérateur voit et peut corriger les
+ * coordonnées du client, pas seulement les consulter). Même décodage de
+ * conflit que `checkOperatorClient` (409 client_conflict).
+ */
+export async function updateOperatorClient(
+  apiUrl: string,
+  token: string,
+  id: number,
+  input: ClientFormInput,
+  onUnauthorized: () => void,
+): Promise<PublicClient> {
+  const response = await authorizedFetch(
+    token,
+    `${apiUrl}/operator/clients/${id}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+  );
+  return parseAtelierResponse<PublicClient>(response, onUnauthorized);
+}
+
+/**
  * R008-AC-05 — envoi de `POST /operator/submit`, avec décodage du
  * `409 client_conflict` que le serveur peut encore renvoyer entre le contrôle
  * et l'envoi.
