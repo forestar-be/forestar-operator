@@ -16,6 +16,7 @@ import headerData from '../config/header.json';
 import { Logo } from '../components/Logo';
 import { useAuth } from '../hooks/AuthProvider';
 import AccountMenu from '../components/AccountMenu';
+import AppMenu from '../components/AppMenu';
 
 interface Props {
   onSidebarOpen: () => void;
@@ -73,7 +74,8 @@ const Header = ({ onSidebarOpen }: Props): JSX.Element => {
             }}
           ></Box>
           {auth.token && (
-            <Box sx={{ display: 'flex' }}>
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <AppMenu current="operator" />
               {auth.ssoEnabled ? (
                 <AccountMenu />
               ) : (
