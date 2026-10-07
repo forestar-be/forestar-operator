@@ -8,6 +8,7 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test:app-menu": "jest --config jest.app-menu.config.cjs --runInBand",
+    "test:print-tickets": "jest --config jest.app-menu.config.cjs --runInBand printTickets",
     "eject": "react-scripts eject",
     "lint": "eslint --ext .ts,.tsx ./src",
     "lint:fix": "eslint --ext .ts,.tsx ./src",

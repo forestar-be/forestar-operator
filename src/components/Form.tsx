@@ -26,7 +26,10 @@ import imageCompression from 'browser-image-compression';
 import { useAuth } from '../hooks/AuthProvider';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import { authorizedFetch } from '../hooks/session';
-import { printHtml } from '../utils/printHtml';
+import {
+  PRINT_SUCCESS_MESSAGE,
+  requestCounterPrint,
+} from '../utils/printTickets';
 import ClientBlock from './ClientBlock';
 import {
   ClientConflictDialog,
@@ -83,6 +86,9 @@ const DynamicForm = () => {
   );
   const [printingTickets, setPrintingTickets] = useState(false);
   const [printTicketsError, setPrintTicketsError] = useState<string | null>(
+    null,
+  );
+  const [printTicketsSuccess, setPrintTicketsSuccess] = useState<string | null>(
     null,
   );
   const signaturePadRef = useRef<SignatureCanvas>(null);
@@ -458,35 +464,32 @@ const DynamicForm = () => {
     void submitRepair(null);
   };
 
-  // R004-S03 — récupère le gabarit HTML des deux tickets (D-11) et déclenche
-  // l'impression. Un échec de chargement laisse la boîte ouverte : on peut
-  // réessayer sans réencoder la fiche.
+  // R002-S03 — « Imprimer les tickets » demande à l'API de les imprimer sur la
+  // Toshiba du comptoir (impression-comptoir) : plus de dialogue d'impression,
+  // plus d'iframe. L'API fabrique elle-même le HTML de la fiche, rien n'est
+  // envoyé d'autre que le numéro. Le bouton se réactive à la fin de l'appel, ce
+  // qui permet de réessayer sans réencoder la fiche.
   const handlePrintTickets = async () => {
-    if (confirmedRepairId === null) return;
+    if (confirmedRepairId === null || printingTickets) return;
     setPrintTicketsError(null);
+    setPrintTicketsSuccess(null);
     setPrintingTickets(true);
     try {
-      const response = await authorizedFetch(
-        auth.token,
-        `${API_URL}/operator/machine-repairs/${confirmedRepairId}/ticket`,
+      const outcome = await requestCounterPrint(() =>
+        authorizedFetch(
+          auth.token,
+          `${API_URL}/operator/machine-repairs/${confirmedRepairId}/ticket/print`,
+          { method: 'POST' },
+        ),
       );
 
-      if (response.status === 401 || response.status === 403) {
+      if (outcome.kind === 'logout') {
         auth.logOut();
-        return;
+      } else if (outcome.kind === 'success') {
+        setPrintTicketsSuccess(PRINT_SUCCESS_MESSAGE);
+      } else {
+        setPrintTicketsError(outcome.message);
       }
-
-      if (!response.ok) {
-        throw new Error('Network response was not ok');
-      }
-
-      const html = await response.text();
-      await printHtml(html);
-    } catch (error) {
-      console.error('Error printing tickets:', error);
-      setPrintTicketsError(
-        'Impossible de charger les tickets. Vérifiez la connexion et réessayez.',
-      );
     } finally {
       setPrintingTickets(false);
     }
@@ -495,6 +498,7 @@ const DynamicForm = () => {
   const handleConfirmationClose = () => {
     setConfirmedRepairId(null);
     setPrintTicketsError(null);
+    setPrintTicketsSuccess(null);
     handleNewForm(true);
   };
 
@@ -814,8 +818,13 @@ const DynamicForm = () => {
       <Dialog open={confirmedRepairId !== null} disableEscapeKeyDown>
         <DialogTitle>Fiche n° {confirmedRepairId} enregistrée</DialogTitle>
         <DialogContent>
+          {printTicketsSuccess && (
+            <Typography role="status" color="success.main" sx={{ mt: 1 }}>
+              {printTicketsSuccess}
+            </Typography>
+          )}
           {printTicketsError && (
-            <Typography color="error" sx={{ mt: 1 }}>
+            <Typography role="alert" color="error" sx={{ mt: 1 }}>
               {printTicketsError}
             </Typography>
           )}
