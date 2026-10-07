@@ -3,7 +3,7 @@ module.exports = {
   clearMocks: true,
   testEnvironment: 'jsdom',
   roots: ['<rootDir>/src'],
-  testMatch: ['**/AppMenu.test.tsx'],
+  testMatch: ['**/AppMenu.test.tsx', '**/printTickets.test.ts'],
   transform: {
     '^.+\\.(ts|tsx|js)$': [
       'ts-jest',
