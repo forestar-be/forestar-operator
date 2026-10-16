@@ -15,6 +15,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Alert,
 } from '@mui/material';
 import '../styles/Form.css';
 import { useTheme } from '@mui/material/styles';
@@ -41,6 +42,8 @@ import {
   submitOperatorForm,
   ClientConflictApiError,
   UnauthorizedError,
+  StorageApiError,
+  type SubmittedRepair,
   type ClientConflictState,
   type ClientConflictField,
   type ClientFormInput,
@@ -84,6 +87,24 @@ const DynamicForm = () => {
   const [confirmedRepairId, setConfirmedRepairId] = useState<number | null>(
     null,
   );
+  const [confirmedRepair, setConfirmedRepair] =
+    useState<SubmittedRepair | null>(null);
+  const [robotMachineTypes, setRobotMachineTypes] = useState<string[]>([]);
+  const [storageSettings, setStorageSettings] = useState({
+    enabled: false,
+    allowOverflow: true,
+  });
+  const [storageDeposited, setStorageDeposited] = useState(true);
+  const [storageError, setStorageError] = useState<string | null>(null);
+  const [overflowRequest, setOverflowRequest] = useState<{
+    client: PublicClient | null;
+  } | null>(null);
+  const submitInFlight = useRef(false);
+  const checkInFlight = useRef(false);
+  const submission = useRef<{ fingerprint: string; id: string } | null>(null);
+  const isStorageRobot =
+    storageSettings.enabled &&
+    robotMachineTypes.includes(formData.machine_type_name);
   const [printingTickets, setPrintingTickets] = useState(false);
   const [printTicketsError, setPrintTicketsError] = useState<string | null>(
     null,
@@ -130,8 +151,13 @@ const DynamicForm = () => {
           throw new Error('Network response was not ok');
         }
 
-        const result: Record<string, string[]> = await response.json();
-        setOptionsListByName(result);
+        const result = await response.json();
+        const { robotMachineTypes = [], storageSettings, ...lists } = result;
+        setOptionsListByName(lists);
+        setRobotMachineTypes(robotMachineTypes);
+        setStorageSettings(
+          storageSettings ?? { enabled: false, allowOverflow: true },
+        );
       } catch (error) {
         console.error('Error fetching options:', error);
         alert('Erreur lors de la récupération des options');
@@ -202,6 +228,8 @@ const DynamicForm = () => {
     event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
   ) => {
     const { name, value } = event.target;
+    if (name === 'machine_type_name' && value !== formData.machine_type_name)
+      setStorageDeposited(true);
     setFormData({
       ...formData,
       [name]: value,
@@ -289,7 +317,11 @@ const DynamicForm = () => {
         return;
       }
     }
-    console.debug('Creating new form');
+    if (submitInFlight.current || checkInFlight.current) return;
+    submission.current = null;
+    setStorageDeposited(true);
+    setStorageError(null);
+    setOverflowRequest(null);
     setFormData({});
     setSignatureData(null);
     setImagePreviewUrl(null);
@@ -319,7 +351,10 @@ const DynamicForm = () => {
    * coordonnées (AC-03) — aucune n'est envoyée, même si des restes de saisie
    * traînent encore dans `formData`.
    */
-  const buildSubmitFormData = (client: PublicClient | null): FormData => {
+  const buildSubmitFormData = (
+    client: PublicClient | null,
+    confirmOverflow: boolean,
+  ): FormData => {
     const formDataToSend = new FormData();
 
     for (const key in formData) {
@@ -341,6 +376,25 @@ const DynamicForm = () => {
       formDataToSend.append('signature', signatureData);
     }
 
+    const fingerprint = JSON.stringify({
+      formData,
+      signatureData,
+      imagePreviewUrl,
+      clientId: client?.id,
+      deposited: isStorageRobot && storageDeposited,
+    });
+    if (submission.current?.fingerprint !== fingerprint) {
+      submission.current = { fingerprint, id: crypto.randomUUID() };
+    }
+    formDataToSend.append('submission_id', submission.current.id);
+    if (storageSettings.enabled) {
+      formDataToSend.append(
+        'storage_deposited',
+        String(isStorageRobot && storageDeposited),
+      );
+    }
+    if (confirmOverflow)
+      formDataToSend.append('storage_confirm_overflow', 'true');
     return formDataToSend;
   };
 
@@ -353,10 +407,16 @@ const DynamicForm = () => {
    * ici rouvre la même fenêtre de conflit, sans rien perdre (la photo, la
    * signature et les champs restent dans l'état du composant).
    */
-  const submitRepair = async (client: PublicClient | null) => {
+  const submitRepair = async (
+    client: PublicClient | null,
+    confirmOverflow = false,
+  ) => {
+    if (submitInFlight.current || confirmedRepairId !== null) return;
+    submitInFlight.current = true;
+    setStorageError(null);
     try {
       setLoadingSubmit(true);
-      const formDataToSend = buildSubmitFormData(client);
+      const formDataToSend = buildSubmitFormData(client, confirmOverflow);
       const result = await submitOperatorForm(
         API_URL ?? '',
         auth.token,
@@ -364,9 +424,18 @@ const DynamicForm = () => {
         auth.logOut,
       );
       setPrintTicketsError(null);
+      setConfirmedRepair(result.newRepair);
       setConfirmedRepairId(result.newRepair.id);
     } catch (error) {
       if (error instanceof UnauthorizedError) return;
+      if (error instanceof StorageApiError) {
+        if (error.code === 'storage_full_confirmation_required') {
+          setOverflowRequest({ client });
+        } else {
+          setStorageError(error.message);
+        }
+        return;
+      }
       if (error instanceof ClientConflictApiError) {
         setConflict({
           field: error.field,
@@ -378,12 +447,19 @@ const DynamicForm = () => {
       console.error("Erreur lors de l'envoi du formulaire:", error);
       alert("Erreur lors de l'envoi du formulaire");
     } finally {
+      submitInFlight.current = false;
       setLoadingSubmit(false);
     }
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (
+      submitInFlight.current ||
+      checkInFlight.current ||
+      confirmedRepairId !== null
+    )
+      return;
 
     if (!signatureData) {
       alert('La signature est requise');
@@ -403,6 +479,7 @@ const DynamicForm = () => {
     }
 
     // AC-04 — nouveau client : contrôle des doublons avant l'envoi.
+    checkInFlight.current = true;
     setCheckingClient(true);
     let result;
     try {
@@ -413,12 +490,14 @@ const DynamicForm = () => {
         auth.logOut,
       );
     } catch (error) {
+      checkInFlight.current = false;
       setCheckingClient(false);
       if (error instanceof UnauthorizedError) return;
       console.error('Erreur lors du contrôle du client:', error);
       alert('Erreur lors du contrôle du client. Réessayez.');
       return;
     }
+    checkInFlight.current = false;
     setCheckingClient(false);
 
     if (result.conflicts.length > 0) {
@@ -497,6 +576,7 @@ const DynamicForm = () => {
 
   const handleConfirmationClose = () => {
     setConfirmedRepairId(null);
+    setConfirmedRepair(null);
     setPrintTicketsError(null);
     setPrintTicketsSuccess(null);
     handleNewForm(true);
@@ -591,6 +671,7 @@ const DynamicForm = () => {
               )}
               <input
                 type="file"
+                aria-label={field.label}
                 hidden
                 accept="image/*"
                 capture="environment"
@@ -699,6 +780,7 @@ const DynamicForm = () => {
           <Button
             variant="contained"
             color="primary"
+            disabled={loadingSubmit || checkingClient}
             onClick={() => handleNewForm()}
             endIcon={<AddCircleOutlineIcon />}
           >
@@ -707,62 +789,98 @@ const DynamicForm = () => {
         </Box>
       </Container>
       <Container>
-        <Box component="form" onSubmit={handleSubmit}>
-          <Grid container spacing={3}>
-            {formConfig ? (
-              <>
-                {/* R008-AC-01 — bloc Client, dans l'ordre et avec les
+        <Box
+          component="form"
+          aria-label="Formulaire réparation/entretien"
+          onSubmit={handleSubmit}
+        >
+          <Box
+            component="fieldset"
+            disabled={loadingSubmit || checkingClient}
+            sx={{ border: 0, p: 0, m: 0, minWidth: 0 }}
+          >
+            <Grid container spacing={3}>
+              {formConfig ? (
+                <>
+                  {/* R008-AC-01 — bloc Client, dans l'ordre et avec les
                     libellés de `Formulaire Opérateur` ; les autres champs
                     sont rendus comme avant. */}
-                <Grid item xs={12}>
-                  <ClientBlock
-                    fields={formConfig.fields.filter((field: any) =>
-                      CLIENT_FIELD_ID_SET.has(field.id),
-                    )}
-                    renderField={renderField}
-                    selectedClient={selectedClient}
-                    onSelectClient={selectClient}
-                    apiUrl={API_URL ?? ''}
-                    token={auth.token}
-                    onUnauthorized={auth.logOut}
-                  />
-                </Grid>
-                {formConfig.fields
-                  .filter((field: any) => !CLIENT_FIELD_ID_SET.has(field.id))
-                  .map((field: any) => (
-                    <Grid
-                      item
-                      xs={12}
-                      sm={
-                        ['textarea', 'signature', 'file'].includes(field.type)
-                          ? 12
-                          : 6
-                      }
-                      key={field.label}
-                    >
-                      {renderField(field)}
-                    </Grid>
-                  ))}
-              </>
-            ) : (
-              <Grid container justifyContent="center">
-                <CircularProgress size={50} color="inherit" />
-              </Grid>
-            )}
-          </Grid>
-          <Box mt={4}>
-            <Button
-              type="submit"
-              variant="contained"
-              color="primary"
-              disabled={loadingSubmit || checkingClient}
-            >
-              {loadingSubmit || checkingClient ? (
-                <CircularProgress size={24} color="inherit" />
+                  <Grid item xs={12}>
+                    <ClientBlock
+                      fields={formConfig.fields.filter((field: any) =>
+                        CLIENT_FIELD_ID_SET.has(field.id),
+                      )}
+                      renderField={renderField}
+                      selectedClient={selectedClient}
+                      onSelectClient={selectClient}
+                      apiUrl={API_URL ?? ''}
+                      token={auth.token}
+                      onUnauthorized={auth.logOut}
+                    />
+                  </Grid>
+                  {formConfig.fields
+                    .filter((field: any) => !CLIENT_FIELD_ID_SET.has(field.id))
+                    .map((field: any) => (
+                      <Grid
+                        item
+                        xs={12}
+                        sm={
+                          ['textarea', 'signature', 'file'].includes(field.type)
+                            ? 12
+                            : 6
+                        }
+                        key={field.label}
+                      >
+                        {renderField(field)}
+                      </Grid>
+                    ))}
+                </>
               ) : (
-                'Envoyer'
+                <Grid container justifyContent="center">
+                  <CircularProgress size={50} color="inherit" />
+                </Grid>
               )}
-            </Button>
+            </Grid>
+            {isStorageRobot ? (
+              <Box mt={3}>
+                <FormControlLabel
+                  label="Robot déposé à l’atelier"
+                  control={
+                    <Checkbox
+                      checked={storageDeposited}
+                      onChange={(event) =>
+                        setStorageDeposited(event.target.checked)
+                      }
+                    />
+                  }
+                />
+                {!storageDeposited ? (
+                  <Typography variant="body2">
+                    Aucun emplacement ne sera réservé. L’étiquette ne portera
+                    pas d’emplacement.
+                  </Typography>
+                ) : null}
+              </Box>
+            ) : null}
+            {storageError ? (
+              <Alert severity="error" sx={{ mt: 2 }}>
+                {storageError} Votre saisie est conservée.
+              </Alert>
+            ) : null}
+            <Box mt={4}>
+              <Button
+                type="submit"
+                variant="contained"
+                color="primary"
+                disabled={loadingSubmit || checkingClient}
+              >
+                {loadingSubmit || checkingClient ? (
+                  <CircularProgress size={24} color="inherit" />
+                ) : (
+                  'Envoyer'
+                )}
+              </Button>
+            </Box>
           </Box>
         </Box>
       </Container>
@@ -778,6 +896,33 @@ const DynamicForm = () => {
         onUseClient={handleSimilarUseClient}
         onCreateNew={handleSimilarCreateNew}
       />
+
+      <Dialog
+        open={overflowRequest !== null}
+        onClose={() => setOverflowRequest(null)}
+      >
+        <DialogTitle>Tous les emplacements sont occupés</DialogTitle>
+        <DialogContent>
+          Enregistrer ce robot déposé sans emplacement ? Il apparaîtra dans les
+          robots à ranger dans Atelier. Votre saisie est conservée.
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOverflowRequest(null)}>
+            Revenir au formulaire
+          </Button>
+          <Button
+            variant="contained"
+            onClick={() => {
+              if (!overflowRequest) return;
+              const { client } = overflowRequest;
+              setOverflowRequest(null);
+              void submitRepair(client, true);
+            }}
+          >
+            Confirmer le dépôt sans emplacement
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Modal for showing image */}
       <Modal open={modalOpen} onClose={handleCloseModal}>
@@ -818,6 +963,29 @@ const DynamicForm = () => {
       <Dialog open={confirmedRepairId !== null} disableEscapeKeyDown>
         <DialogTitle>Fiche n° {confirmedRepairId} enregistrée</DialogTitle>
         <DialogContent>
+          {confirmedRepair?.storageSlot ? (
+            <Box sx={{ mb: 2 }}>
+              <Typography>Emplacement réservé</Typography>
+              <Typography variant="h3" component="p" fontWeight={700}>
+                R{confirmedRepair.storageSlot.rack.number}/
+                {confirmedRepair.storageSlot.level}/
+                {confirmedRepair.storageSlot.position}
+              </Typography>
+            </Box>
+          ) : confirmedRepair?.storageDepositedAt ? (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              Robot déposé sans emplacement. À ranger dans Atelier.
+            </Alert>
+          ) : null}
+          {confirmedRepair?.storageDepositedAt ? (
+            <Button
+              href={`https://atelier.forestar.be/rangement?repair=${confirmedRepairId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Changer de place
+            </Button>
+          ) : null}
           {printTicketsSuccess && (
             <Typography role="status" color="success.main" sx={{ mt: 1 }}>
               {printTicketsSuccess}
@@ -829,7 +997,7 @@ const DynamicForm = () => {
             </Typography>
           )}
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={{ flexWrap: 'wrap', gap: 1 }}>
           <Button
             variant="contained"
             color="primary"

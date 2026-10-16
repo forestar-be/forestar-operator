@@ -89,6 +89,28 @@ export class ClientConflictApiError extends Error {
   }
 }
 
+export interface SubmittedRepair {
+  id: number;
+  storageDepositedAt?: string | null;
+  storageSlot?: {
+    id: number;
+    level: number;
+    position: string;
+    rack: { id: number; number: number };
+  } | null;
+}
+
+export class StorageApiError extends Error {
+  constructor(
+    readonly code: 'storage_full_confirmation_required' | 'storage_full',
+    message: string,
+  ) {
+    super(message);
+    this.name = 'StorageApiError';
+    Object.setPrototypeOf(this, StorageApiError.prototype);
+  }
+}
+
 /**
  * Décode une réponse des routes clients de l'opérateur : redirige vers la
  * déconnexion sur 401/403, lève `ClientConflictApiError` sur un
@@ -109,6 +131,17 @@ async function parseAtelierResponse<T>(
         body.field,
         body.client,
         body.conflicts ?? [],
+      );
+    }
+    if (
+      response.status === 409 &&
+      ['storage_full_confirmation_required', 'storage_full'].includes(
+        body?.code,
+      )
+    ) {
+      throw new StorageApiError(
+        body.code,
+        body.message || 'Tous les emplacements sont occupés.',
       );
     }
     throw new Error(body?.message || `Réponse HTTP ${response.status}`);
@@ -190,12 +223,12 @@ export async function submitOperatorForm(
   token: string,
   formData: FormData,
   onUnauthorized: () => void,
-): Promise<{ message: string; newRepair: { id: number } }> {
+): Promise<{ message: string; newRepair: SubmittedRepair }> {
   const response = await authorizedFetch(token, `${apiUrl}/operator/submit`, {
     method: 'POST',
     body: formData,
   });
-  return parseAtelierResponse<{ message: string; newRepair: { id: number } }>(
+  return parseAtelierResponse<{ message: string; newRepair: SubmittedRepair }>(
     response,
     onUnauthorized,
   );
