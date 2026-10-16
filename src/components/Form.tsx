@@ -710,13 +710,13 @@ const DynamicForm = () => {
               {field.label}
             </Typography>
             <Grid container flexDirection={'column'}>
-              <Grid item>
+              <Grid item sx={{ minWidth: 0, maxWidth: '100%' }}>
                 <SignatureCanvas
                   ref={signaturePadRef}
                   penColor="black"
                   canvasProps={{
-                    width: signatureCanvaWidth,
                     height: 200,
+                    style: { width: signatureCanvaWidth, maxWidth: '100%' },
                     className: 'sigCanvas',
                   }}
                   onEnd={() =>
@@ -726,13 +726,17 @@ const DynamicForm = () => {
                   }
                 />
               </Grid>
-              <Grid item>
+              <Grid item sx={{ minWidth: 0, maxWidth: '100%' }}>
                 <Button
                   variant="contained"
                   color="secondary"
                   onClick={handleClearSignature}
                   fullWidth
-                  sx={{ marginTop: 2, width: signatureCanvaWidth }}
+                  sx={{
+                    marginTop: 2,
+                    width: signatureCanvaWidth,
+                    maxWidth: '100%',
+                  }}
                   startIcon={<DeleteIcon />}
                 >
                   Supprimer Signature
@@ -760,6 +764,8 @@ const DynamicForm = () => {
       <Container>
         <Box
           display="flex"
+          flexDirection={{ xs: 'column', sm: 'row' }}
+          gap={2}
           justifyContent="space-between"
           alignItems="center"
           marginBottom={4}
@@ -773,6 +779,7 @@ const DynamicForm = () => {
             sx={{
               color: theme.palette.text.primary,
               textTransform: 'uppercase',
+              fontSize: { xs: 20, sm: 24 },
             }}
           >
             Formulaire réparation/entretien
@@ -979,7 +986,7 @@ const DynamicForm = () => {
           ) : null}
           {confirmedRepair?.storageDepositedAt ? (
             <Button
-              href={`https://atelier.forestar.be/rangement?repair=${confirmedRepairId}`}
+              href={`https://atelier.forestar.be/rangement?fiche=${confirmedRepairId}`}
               target="_blank"
               rel="noopener noreferrer"
             >

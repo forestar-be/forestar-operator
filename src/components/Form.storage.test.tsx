@@ -166,7 +166,7 @@ test('saturation : confirme explicitement, rejoue le même identifiant et montre
   expect(second.get('storage_deposited')).toBe('true');
   expect(
     screen.getByRole('link', { name: 'Changer de place' }),
-  ).toHaveAttribute('href', 'https://atelier.forestar.be/rangement?repair=42');
+  ).toHaveAttribute('href', 'https://atelier.forestar.be/rangement?fiche=42');
   expect(fetchMock.mock.calls.every(([, url]) => !url.includes('/print'))).toBe(
     true,
   );
