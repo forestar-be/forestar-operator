@@ -217,3 +217,90 @@ test('double soumission bloquée et robot non déposé sans emplacement', async 
     ).toBeEnabled(),
   );
 });
+
+test('API : les deux refus de saturation sont décodés en erreurs métier', async () => {
+  const actual = jest.requireActual<typeof import('../api/operatorClients')>(
+    '../api/operatorClients',
+  );
+  for (const code of ['storage_full_confirmation_required', 'storage_full']) {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 409,
+      json: async () => ({ code, message: 'Complet' }),
+    });
+    await expect(
+      actual.submitOperatorForm('', auth.token, new FormData(), auth.logOut),
+    ).rejects.toMatchObject({ code, message: 'Complet' });
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 409,
+      json: async () => ({ code }),
+    });
+    await expect(
+      actual.submitOperatorForm('', auth.token, new FormData(), auth.logOut),
+    ).rejects.toBeInstanceOf(StorageApiError);
+  }
+});
+
+test('impression refusée : garde la réservation et ne recrée jamais le ticket', async () => {
+  submitMock.mockResolvedValueOnce({
+    newRepair: {
+      id: 45,
+      storageDepositedAt: '2026-10-16',
+      storageSlot: {
+        id: 1,
+        level: 1,
+        position: 'A',
+        rack: { id: 1, number: 1 },
+      },
+    },
+  });
+  const view = await ready();
+  send(view);
+  await screen.findByText('R1/1/A');
+  fetchMock.mockResolvedValueOnce({
+    status: 502,
+    json: async () => ({ code: 'print_failed', detail: 'fixture hors ligne' }),
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Imprimer les tickets' }));
+  await screen.findByText(/fixture hors ligne/);
+  expect(screen.getByText('R1/1/A')).toBeVisible();
+  expect(submitMock).toHaveBeenCalledTimes(1);
+  expect(
+    fetchMock.mock.calls.filter(([, url]) => url.includes('/print')),
+  ).toHaveLength(1);
+});
+
+test('le débordement peut être annulé sans création puis confirmé sans place', async () => {
+  submitMock
+    .mockRejectedValueOnce(
+      new StorageApiError('storage_full_confirmation_required', 'Complet'),
+    )
+    .mockRejectedValueOnce(
+      new StorageApiError('storage_full_confirmation_required', 'Complet'),
+    )
+    .mockResolvedValueOnce({
+      newRepair: {
+        id: 46,
+        storageDepositedAt: '2026-10-16',
+        storageSlot: null,
+      },
+    });
+  const view = await ready();
+  send(view);
+  fireEvent.click(await screen.findByText('Revenir au formulaire'));
+  expect(submitMock).toHaveBeenCalledTimes(1);
+  expect(await screen.findByRole('checkbox')).toBeChecked();
+  send(view);
+  fireEvent.click(
+    await screen.findByText('Confirmer le dépôt sans emplacement'),
+  );
+  await screen.findByText(
+    'Robot déposé sans emplacement. À ranger dans Atelier.',
+  );
+  expect(screen.queryByText('Emplacement réservé')).not.toBeInTheDocument();
+  const payloads = submitMock.mock.calls.map((call) => call[2] as FormData);
+  expect(
+    new Set(payloads.map((payload) => payload.get('submission_id'))).size,
+  ).toBe(1);
+});
