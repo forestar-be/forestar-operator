@@ -42,6 +42,7 @@ import {
   submitOperatorForm,
   ClientConflictApiError,
   UnauthorizedError,
+  OperatorHttpError,
   StorageApiError,
   type SubmittedRepair,
   type ClientConflictState,
@@ -102,6 +103,11 @@ const DynamicForm = () => {
   const submitInFlight = useRef(false);
   const checkInFlight = useRef(false);
   const submission = useRef<{ fingerprint: string; id: string } | null>(null);
+  const unresolvedSubmission = useRef<{
+    client: PublicClient | null;
+    payload: FormData;
+  } | null>(null);
+  const [unconfirmedSubmission, setUnconfirmedSubmission] = useState(false);
   const isStorageRobot =
     storageSettings.enabled &&
     robotMachineTypes.includes(formData.machine_type_name);
@@ -214,6 +220,7 @@ const DynamicForm = () => {
    * `null` revient à la recherche (« Changer de client »).
    */
   const selectClient = (client: PublicClient | null) => {
+    if (unresolvedSubmission.current) return;
     setSelectedClient(client);
     if (client) {
       setFormData((prev: any) => {
@@ -302,6 +309,7 @@ const DynamicForm = () => {
   };
 
   const handleNewForm = (noCheck = false) => {
+    if (unresolvedSubmission.current) return;
     if (
       !noCheck &&
       (Object.keys(formData).length > 0 ||
@@ -410,13 +418,18 @@ const DynamicForm = () => {
   const submitRepair = async (
     client: PublicClient | null,
     confirmOverflow = false,
+    retryPayload?: FormData,
   ) => {
     if (submitInFlight.current || confirmedRepairId !== null) return;
     submitInFlight.current = true;
     setStorageError(null);
     try {
       setLoadingSubmit(true);
-      const formDataToSend = buildSubmitFormData(client, confirmOverflow);
+      const formDataToSend =
+        retryPayload ?? buildSubmitFormData(client, confirmOverflow);
+      // Save the complete command before sending: an uncertain result must be
+      // retried verbatim, before checking whether its new client now exists.
+      unresolvedSubmission.current = { client, payload: formDataToSend };
       const result = await submitOperatorForm(
         API_URL ?? '',
         auth.token,
@@ -426,7 +439,24 @@ const DynamicForm = () => {
       setPrintTicketsError(null);
       setConfirmedRepair(result.newRepair);
       setConfirmedRepairId(result.newRepair.id);
+      unresolvedSubmission.current = null;
+      setUnconfirmedSubmission(false);
     } catch (error) {
+      const definiteRefusal =
+        error instanceof UnauthorizedError ||
+        error instanceof StorageApiError ||
+        error instanceof ClientConflictApiError ||
+        (error instanceof OperatorHttpError &&
+          error.status >= 400 &&
+          error.status < 500 &&
+          error.status !== 408);
+      if (definiteRefusal) {
+        unresolvedSubmission.current = null;
+        setUnconfirmedSubmission(false);
+      } else {
+        setUnconfirmedSubmission(true);
+        return;
+      }
       if (error instanceof UnauthorizedError) return;
       if (error instanceof StorageApiError) {
         if (error.code === 'storage_full_confirmation_required') {
@@ -460,6 +490,12 @@ const DynamicForm = () => {
       confirmedRepairId !== null
     )
       return;
+
+    const unresolved = unresolvedSubmission.current;
+    if (unresolved) {
+      await submitRepair(unresolved.client, false, unresolved.payload);
+      return;
+    }
 
     if (!signatureData) {
       alert('La signature est requise');
@@ -787,7 +823,7 @@ const DynamicForm = () => {
           <Button
             variant="contained"
             color="primary"
-            disabled={loadingSubmit || checkingClient}
+            disabled={loadingSubmit || checkingClient || unconfirmedSubmission}
             onClick={() => handleNewForm()}
             endIcon={<AddCircleOutlineIcon />}
           >
@@ -796,6 +832,29 @@ const DynamicForm = () => {
         </Box>
       </Container>
       <Container>
+        {unconfirmedSubmission ? (
+          <Alert severity="warning" sx={{ mb: 3 }}>
+            L’enregistrement n’a pas pu être confirmé. Vérifiez la connexion,
+            puis réessayez cet envoi avant de saisir une autre fiche.
+            <Box mt={2}>
+              <Button
+                variant="contained"
+                disabled={loadingSubmit}
+                onClick={() => {
+                  const unresolved = unresolvedSubmission.current;
+                  if (unresolved)
+                    void submitRepair(
+                      unresolved.client,
+                      false,
+                      unresolved.payload,
+                    );
+                }}
+              >
+                Réessayer cet envoi
+              </Button>
+            </Box>
+          </Alert>
+        ) : null}
         <Box
           component="form"
           aria-label="Formulaire réparation/entretien"
@@ -803,7 +862,7 @@ const DynamicForm = () => {
         >
           <Box
             component="fieldset"
-            disabled={loadingSubmit || checkingClient}
+            disabled={loadingSubmit || checkingClient || unconfirmedSubmission}
             sx={{ border: 0, p: 0, m: 0, minWidth: 0 }}
           >
             <Grid container spacing={3}>
