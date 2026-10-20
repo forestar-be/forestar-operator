@@ -13,15 +13,15 @@
     "lint": "eslint --ext .ts,.tsx ./src",
     "lint:fix": "eslint --ext .ts,.tsx ./src",
     "prettier": "prettier \"**/*.+(json|ts|tsx)\"",
-    "format:check": "npm run prettier -- --check",
-    "format:fix": "npm run prettier -- --write",
+    "format:check": "pnpm run prettier -- --check",
+    "format:fix": "pnpm run prettier -- --write",
     "types:check": "bash -c tsc --noEmit --pretty"
   },
   "lint-staged": {
     "**/*.{js,jsx,ts,tsx}": [
-      "npm run lint",
-      "npm run types:check",
-      "npm run format:check"
+      "pnpm run lint",
+      "pnpm run types:check",
+      "pnpm run format:check"
     ]
   },
   "eslintConfig": {
@@ -91,5 +91,6 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
-  }
+  },
+  "packageManager": "pnpm@10.33.0"
 }
