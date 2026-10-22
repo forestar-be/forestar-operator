@@ -68,7 +68,23 @@ export interface ClientCheckResult {
 export type ClientFormInput = Partial<Record<ClientFieldId, string>>;
 
 /** Session expirée ou refusée : l'appelant déclenche `auth.logOut()`. */
-export class UnauthorizedError extends Error {}
+export class UnauthorizedError extends Error {
+  constructor() {
+    super('Session expirée ou refusée.');
+    Object.setPrototypeOf(this, UnauthorizedError.prototype);
+  }
+}
+
+/** A received HTTP refusal can be distinguished from a lost response. */
+export class OperatorHttpError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    Object.setPrototypeOf(this, OperatorHttpError.prototype);
+  }
+}
 
 /**
  * `409 client_conflict` décodé, avec le champ en cause et le client existant
@@ -86,6 +102,29 @@ export class ClientConflictApiError extends Error {
         : 'Un client a déjà cet email.',
     );
     this.name = 'ClientConflictApiError';
+    Object.setPrototypeOf(this, ClientConflictApiError.prototype);
+  }
+}
+
+export interface SubmittedRepair {
+  id: number;
+  storageDepositedAt?: string | null;
+  storageSlot?: {
+    id: number;
+    level: number;
+    position: string;
+    rack: { id: number; number: number };
+  } | null;
+}
+
+export class StorageApiError extends Error {
+  constructor(
+    readonly code: 'storage_full_confirmation_required' | 'storage_full',
+    message: string,
+  ) {
+    super(message);
+    this.name = 'StorageApiError';
+    Object.setPrototypeOf(this, StorageApiError.prototype);
   }
 }
 
@@ -111,7 +150,21 @@ async function parseAtelierResponse<T>(
         body.conflicts ?? [],
       );
     }
-    throw new Error(body?.message || `Réponse HTTP ${response.status}`);
+    if (
+      response.status === 409 &&
+      ['storage_full_confirmation_required', 'storage_full'].includes(
+        body?.code,
+      )
+    ) {
+      throw new StorageApiError(
+        body.code,
+        body.message || 'Tous les emplacements sont occupés.',
+      );
+    }
+    throw new OperatorHttpError(
+      response.status,
+      body?.message || `Réponse HTTP ${response.status}`,
+    );
   }
   return response.json();
 }
@@ -190,12 +243,12 @@ export async function submitOperatorForm(
   token: string,
   formData: FormData,
   onUnauthorized: () => void,
-): Promise<{ message: string; newRepair: { id: number } }> {
+): Promise<{ message: string; newRepair: SubmittedRepair }> {
   const response = await authorizedFetch(token, `${apiUrl}/operator/submit`, {
     method: 'POST',
     body: formData,
   });
-  return parseAtelierResponse<{ message: string; newRepair: { id: number } }>(
+  return parseAtelierResponse<{ message: string; newRepair: SubmittedRepair }>(
     response,
     onUnauthorized,
   );
