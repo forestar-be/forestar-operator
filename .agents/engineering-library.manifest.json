@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "library": "https://github.com/Charles-HL/ai-engineering-library",
+  "revision": "09c0148bd7080ce9fc05f045772bc729d6ba13c4",
+  "packs": [
+    "memory",
+    "memory-node"
+  ],
+  "omissions": [
+    "core: shared roles, review and validation skills, policy and client profiles are installed once at the workspace root, not in this repository",
+    "adapter-claude, adapter-codex: client profiles live at the workspace root"
+  ],
+  "files": {
+    ".agents/guides/memory.md": {
+      "pack": "memory",
+      "source": "packs/memory/files/.agents/guides/memory.md",
+      "upstream_sha256": "322d3c8dd94d3fb41395345c89f712d924ad9ca13f5b761dbc64cd38c6eb25d1",
+      "installed_sha256": "07b9b750cca5d07046445f42435da98301c12c97442d82f0b93db3436b8c1a86",
+      "adaptations": [
+        "Prepended the Forestar layout note (wiki per repository, root index only); commands narrowed to the Node runtime"
+      ]
+    },
+    ".agents/templates/memory-entry.md": {
+      "pack": "memory",
+      "source": "packs/memory/files/.agents/templates/memory-entry.md",
+      "upstream_sha256": "112cc20b04fdaf816990d57b1e9f25af95ad08d815bc7c8191529186cd1fa3ca",
+      "installed_sha256": "112cc20b04fdaf816990d57b1e9f25af95ad08d815bc7c8191529186cd1fa3ca",
+      "adaptations": []
+    },
+    ".agents/templates/nested-AGENTS.md": {
+      "pack": "memory",
+      "source": "packs/memory/files/.agents/templates/nested-AGENTS.md",
+      "upstream_sha256": "ba005aeb010b4e5b1e55a10232a8fbeeb45144f0a7ec6ef5f1eeb277ec023ba5",
+      "installed_sha256": "ba005aeb010b4e5b1e55a10232a8fbeeb45144f0a7ec6ef5f1eeb277ec023ba5",
+      "adaptations": []
+    },
+    "docs/agent-memory/README.md": {
+      "pack": "memory",
+      "source": "packs/memory/files/docs/agent-memory/README.md",
+      "upstream_sha256": "a9064cbd831897d779affeb2be3d0c3545f641950977435667db4be879d6d975",
+      "installed_sha256": "a9064cbd831897d779affeb2be3d0c3545f641950977435667db4be879d6d975",
+      "adaptations": []
+    },
+    "tools/agent-memory/check.ts": {
+      "pack": "memory-node",
+      "source": "packs/memory-node/files/tools/agent-memory/check.ts",
+      "upstream_sha256": "7e3a5248eca94b06a69b0c310da3439132398ab8a7f4a72438959074906508e2",
+      "installed_sha256": "7e3a5248eca94b06a69b0c310da3439132398ab8a7f4a72438959074906508e2",
+      "adaptations": []
+    },
+    "tools/agent-memory/impact.ts": {
+      "pack": "memory-node",
+      "source": "packs/memory-node/files/tools/agent-memory/impact.ts",
+      "upstream_sha256": "0f99ffc4fd483f7a8691d0a685967067225009610abff38f8ee0bfb833e5a26d",
+      "installed_sha256": "0f99ffc4fd483f7a8691d0a685967067225009610abff38f8ee0bfb833e5a26d",
+      "adaptations": []
+    },
+    "tools/agent-memory/lib.ts": {
+      "pack": "memory-node",
+      "source": "packs/memory-node/files/tools/agent-memory/lib.ts",
+      "upstream_sha256": "7b53f292d1fe2d0e323cc79e5ed289bcaf3867a84571c0399a932379ee5c8113",
+      "installed_sha256": "7b53f292d1fe2d0e323cc79e5ed289bcaf3867a84571c0399a932379ee5c8113",
+      "adaptations": []
+    },
+    "tools/agent-memory/schema.json": {
+      "pack": "memory-node",
+      "source": "packs/memory-node/files/tools/agent-memory/schema.json",
+      "upstream_sha256": "e04b828a35f4441f4eaf9373514122dc17e64ede0440b9d30a3ad6d60311d829",
+      "installed_sha256": "e04b828a35f4441f4eaf9373514122dc17e64ede0440b9d30a3ad6d60311d829",
+      "adaptations": []
+    }
+  }
+}

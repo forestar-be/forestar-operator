@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:engineering-library:agent-memory:frontmatter:1",
+  "title": "Repository Agent Memory Frontmatter",
+  "type": "object",
+  "required": [
+    "id",
+    "scope",
+    "paths",
+    "tags",
+    "last_reviewed",
+    "review_after_days",
+    "confidence"
+  ],
+  "properties": {
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "scope": { "type": "string" },
+    "paths": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+    "tags": { "type": "array", "items": { "type": "string" } },
+    "owners": { "type": "array", "items": { "type": "string" } },
+    "last_reviewed": { "type": "string", "format": "date" },
+    "review_after_days": { "type": "integer", "minimum": 1 },
+    "confidence": { "enum": ["verified", "draft", "deprecated"] }
+  },
+  "additionalProperties": true
+}

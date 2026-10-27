@@ -5,6 +5,8 @@
   "license": "Copyright © All Rights Reserved Charles HILD LÊ",
   "private": true,
   "scripts": {
+    "memory:check": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tools/agent-memory/check.ts",
+    "memory:impact": "node tools/agent-memory/impact.ts",
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test:app-menu": "jest --config jest.app-menu.config.cjs --runInBand",
