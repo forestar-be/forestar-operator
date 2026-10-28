@@ -16,5 +16,6 @@
     "noEmit": true,
     "jsx": "react-jsx"
   },
-  "include": ["src", "jest.config.js", "jest.setup.js", "**/*.ts", "**/*.tsx"]
+  "include": ["src", "jest.config.js", "jest.setup.js", "**/*.ts", "**/*.tsx"],
+  "exclude": ["node_modules", "tools/agent-memory"]
 }
