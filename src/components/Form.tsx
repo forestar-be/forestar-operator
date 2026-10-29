@@ -10,6 +10,10 @@ import {
   Modal,
   CircularProgress,
   FormControlLabel,
+  FormControl,
+  FormLabel,
+  RadioGroup,
+  Radio,
   Checkbox,
   Dialog,
   DialogTitle,
@@ -45,6 +49,8 @@ import {
   OperatorHttpError,
   StorageApiError,
   type SubmittedRepair,
+  type StorageSize,
+  submittedStorageCode,
   type ClientConflictState,
   type ClientConflictField,
   type ClientFormInput,
@@ -96,6 +102,12 @@ const DynamicForm = () => {
     allowOverflow: true,
   });
   const [storageDeposited, setStorageDeposited] = useState(true);
+  // Taille par défaut de chaque modèle (réglée dans l'Atelier) et choix explicite
+  // de l'employé : tant qu'il n'a pas choisi, la taille suit le modèle sélectionné.
+  const [robotTypeSizes, setRobotTypeSizes] = useState<
+    Record<string, StorageSize>
+  >({});
+  const [sizeOverride, setSizeOverride] = useState<StorageSize | null>(null);
   const [storageError, setStorageError] = useState<string | null>(null);
   const [overflowRequest, setOverflowRequest] = useState<{
     client: PublicClient | null;
@@ -111,6 +123,8 @@ const DynamicForm = () => {
   const isStorageRobot =
     storageSettings.enabled &&
     robotMachineTypes.includes(formData.machine_type_name);
+  const storageSize: StorageSize =
+    sizeOverride ?? robotTypeSizes[formData.robot_type_name] ?? 'STANDARD';
   const [printingTickets, setPrintingTickets] = useState(false);
   const [printTicketsError, setPrintTicketsError] = useState<string | null>(
     null,
@@ -158,9 +172,15 @@ const DynamicForm = () => {
         }
 
         const result = await response.json();
-        const { robotMachineTypes = [], storageSettings, ...lists } = result;
+        const {
+          robotMachineTypes = [],
+          robotTypeSizes = {},
+          storageSettings,
+          ...lists
+        } = result;
         setOptionsListByName(lists);
         setRobotMachineTypes(robotMachineTypes);
+        setRobotTypeSizes(robotTypeSizes);
         setStorageSettings(
           storageSettings ?? { enabled: false, allowOverflow: true },
         );
@@ -328,6 +348,7 @@ const DynamicForm = () => {
     if (submitInFlight.current || checkInFlight.current) return;
     submission.current = null;
     setStorageDeposited(true);
+    setSizeOverride(null);
     setStorageError(null);
     setOverflowRequest(null);
     setFormData({});
@@ -390,6 +411,7 @@ const DynamicForm = () => {
       imagePreviewUrl,
       clientId: client?.id,
       deposited: isStorageRobot && storageDeposited,
+      size: isStorageRobot ? storageSize : null,
     });
     if (submission.current?.fingerprint !== fingerprint) {
       submission.current = { fingerprint, id: crypto.randomUUID() };
@@ -400,6 +422,7 @@ const DynamicForm = () => {
         'storage_deposited',
         String(isStorageRobot && storageDeposited),
       );
+      if (isStorageRobot) formDataToSend.append('storage_size', storageSize);
     }
     if (confirmOverflow)
       formDataToSend.append('storage_confirm_overflow', 'true');
@@ -926,6 +949,31 @@ const DynamicForm = () => {
                     pas d’emplacement.
                   </Typography>
                 ) : null}
+                <FormControl sx={{ display: 'block', mt: 1 }}>
+                  <FormLabel id="storage-size-label">
+                    Place dans le rangement
+                  </FormLabel>
+                  <RadioGroup
+                    row
+                    aria-labelledby="storage-size-label"
+                    name="storage_size"
+                    value={storageSize}
+                    onChange={(event) =>
+                      setSizeOverride(event.target.value as StorageSize)
+                    }
+                  >
+                    <FormControlLabel
+                      value="STANDARD"
+                      control={<Radio />}
+                      label="Standard (1 place)"
+                    />
+                    <FormControlLabel
+                      value="LARGE"
+                      control={<Radio />}
+                      label="Large (2 places)"
+                    />
+                  </RadioGroup>
+                </FormControl>
               </Box>
             ) : null}
             {storageError ? (
@@ -1031,11 +1079,13 @@ const DynamicForm = () => {
         <DialogContent>
           {confirmedRepair?.storageSlot ? (
             <Box sx={{ mb: 2 }}>
-              <Typography>Emplacement réservé</Typography>
+              <Typography>
+                {confirmedRepair.storageSecondSlot
+                  ? 'Emplacements réservés (2 places)'
+                  : 'Emplacement réservé'}
+              </Typography>
               <Typography variant="h3" component="p" fontWeight={700}>
-                R{confirmedRepair.storageSlot.rack.number}/
-                {confirmedRepair.storageSlot.level}/
-                {confirmedRepair.storageSlot.position}
+                {submittedStorageCode(confirmedRepair)}
               </Typography>
             </Box>
           ) : confirmedRepair?.storageDepositedAt ? (

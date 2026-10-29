@@ -106,15 +106,32 @@ export class ClientConflictApiError extends Error {
   }
 }
 
+export type StorageSize = 'STANDARD' | 'LARGE';
+
 export interface SubmittedRepair {
   id: number;
   storageDepositedAt?: string | null;
+  storageSize?: StorageSize;
+  /** Code de la ou des places, produit par le serveur (`R1/2/A` ou `R1/2/A-B`). */
+  storageCode?: string | null;
   storageSlot?: {
     id: number;
     level: number;
     position: string;
     rack: { id: number; number: number };
   } | null;
+  storageSecondSlot?: { id: number; position: string } | null;
+}
+
+/** Le code serveur fait foi ; le repli sert à une réponse d'un ancien serveur. */
+export function submittedStorageCode(repair: SubmittedRepair): string | null {
+  if (repair.storageCode) return repair.storageCode;
+  const slot = repair.storageSlot;
+  if (!slot) return null;
+  const code = `R${slot.rack.number}/${slot.level}/${slot.position}`;
+  return repair.storageSecondSlot
+    ? `${code}-${repair.storageSecondSlot.position}`
+    : code;
 }
 
 export class StorageApiError extends Error {

@@ -63,6 +63,7 @@ const fields = [
   { id: 'last_name', label: 'Nom fixture', type: 'text' },
   { id: 'phone', label: 'Téléphone fixture', type: 'text' },
   { id: 'machine_type_name', label: 'Type machine', type: 'text' },
+  { id: 'robot_type_name', label: 'Modèle fixture', type: 'text' },
   { id: 'robot_pin', label: 'PIN', type: 'text' },
   { id: 'file', label: 'Photo fixture', type: 'file' },
   { id: 'signature', label: 'Signature', type: 'signature' },
@@ -78,6 +79,10 @@ async function setup(enabled = true) {
         : {
             machineType: ['Robot', 'Tondeuse'],
             robotMachineTypes: ['Robot'],
+            robotTypeSizes: {
+              'Modèle large': 'LARGE',
+              'Modèle std': 'STANDARD',
+            },
             storageSettings: { enabled, allowOverflow: true },
           },
   }));
@@ -454,4 +459,89 @@ test('API : distingue le statut HTTP reçu d’une réponse réseau perdue', asy
   await expect(
     actual.submitOperatorForm('', auth.token, new FormData(), auth.logOut),
   ).rejects.toBeInstanceOf(actual.ClientConflictApiError);
+});
+
+test('taille de rangement : suit le modèle tant que l’employé n’a pas choisi, puis son choix prime', async () => {
+  await setup();
+  fireEvent.change(screen.getByLabelText('Type machine'), {
+    target: { name: 'machine_type_name', value: 'Robot' },
+  });
+  const standard = () =>
+    screen.getByRole('radio', { name: 'Standard (1 place)' });
+  const large = () => screen.getByRole('radio', { name: 'Large (2 places)' });
+  expect(standard()).toBeChecked();
+  fireEvent.change(screen.getByLabelText('Modèle fixture'), {
+    target: { name: 'robot_type_name', value: 'Modèle large' },
+  });
+  expect(large()).toBeChecked();
+  fireEvent.change(screen.getByLabelText('Modèle fixture'), {
+    target: { name: 'robot_type_name', value: 'Modèle std' },
+  });
+  expect(standard()).toBeChecked();
+  fireEvent.click(large());
+  fireEvent.change(screen.getByLabelText('Modèle fixture'), {
+    target: { name: 'robot_type_name', value: 'Modèle std' },
+  });
+  fireEvent.change(screen.getByLabelText('Modèle fixture'), {
+    target: { name: 'robot_type_name', value: 'Modèle large' },
+  });
+  fireEvent.change(screen.getByLabelText('Modèle fixture'), {
+    target: { name: 'robot_type_name', value: 'Modèle std' },
+  });
+  expect(large()).toBeChecked();
+});
+
+test('taille de rangement : absente hors robot, envoyée avec la fiche, code double à la confirmation', async () => {
+  submitMock.mockResolvedValueOnce({
+    newRepair: {
+      id: 45,
+      storageDepositedAt: '2026-10-29',
+      storageSize: 'LARGE',
+      storageCode: 'R3/2/A-B',
+      storageSlot: {
+        id: 1,
+        level: 2,
+        position: 'A',
+        rack: { id: 1, number: 3 },
+      },
+      storageSecondSlot: { id: 2, position: 'B' },
+    },
+  });
+  const view = await ready();
+  fireEvent.change(screen.getByLabelText('Modèle fixture'), {
+    target: { name: 'robot_type_name', value: 'Modèle large' },
+  });
+  send(view);
+  await screen.findByText('R3/2/A-B');
+  expect(screen.getByText('Emplacements réservés (2 places)')).toBeVisible();
+  expect((submitMock.mock.calls[0][2] as FormData).get('storage_size')).toBe(
+    'LARGE',
+  );
+});
+
+test('taille de rangement : le serveur d’un autre âge sans storageCode garde un code correct', async () => {
+  submitMock.mockResolvedValueOnce({
+    newRepair: {
+      id: 46,
+      storageDepositedAt: '2026-10-29',
+      storageSlot: {
+        id: 1,
+        level: 1,
+        position: 'B',
+        rack: { id: 1, number: 2 },
+      },
+      storageSecondSlot: { id: 2, position: 'C' },
+    },
+  });
+  const view = await ready();
+  send(view);
+  await screen.findByText('R2/1/B-C');
+});
+
+test('taille de rangement : sélecteur masqué pour une machine qui n’est pas un robot', async () => {
+  await setup();
+  fireEvent.change(screen.getByLabelText('Type machine'), {
+    target: { name: 'machine_type_name', value: 'Tondeuse' },
+  });
+  expect(screen.queryByRole('radio')).not.toBeInTheDocument();
 });
