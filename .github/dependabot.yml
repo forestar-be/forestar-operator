@@ -1,0 +1,31 @@
+# Correctifs de SÉCURITÉ seulement (roadmap securite-services-et-journaux, R003-S03).
+# `open-pull-requests-limit: 0` coupe les PR de versions ordinaires ; les PR de
+# sécurité de Dependabot (réglage « Dependabot security updates » du dépôt) n'y
+# sont pas soumises. Aucune fusion ni aucun déploiement automatiques : chaque PR
+# passe la CI du dépôt (dont la garde de sécurité) et une revue humaine.
+version: 2
+registries:
+  # Paquets @forestar-be/* (GitHub Packages) : jeton en lecture seule,
+  # secret Dependabot DEPENDABOT_PACKAGES_TOKEN à créer par le PO.
+  forestar-github-packages:
+    type: npm-registry
+    url: https://npm.pkg.github.com
+    token: ${{secrets.DEPENDABOT_PACKAGES_TOKEN}}
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+    labels: [security]
+    commit-message:
+      prefix: fix(security)
+    registries: [forestar-github-packages]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+    labels: [security]
+    commit-message:
+      prefix: fix(security)
