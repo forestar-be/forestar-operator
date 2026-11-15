@@ -1,8 +1,9 @@
-# Correctifs de SÉCURITÉ seulement (roadmap securite-services-et-journaux, R003-S03).
-# `open-pull-requests-limit: 0` coupe les PR de versions ordinaires ; les PR de
-# sécurité de Dependabot (réglage « Dependabot security updates » du dépôt) n'y
-# sont pas soumises. Aucune fusion ni aucun déploiement automatiques : chaque PR
-# passe la CI du dépôt (dont la garde de sécurité) et une revue humaine.
+# Mises à jour de dépendances (FORESTAR-236, R010-S02). Les correctifs et mineures arrivent
+# groupés en UNE PR par écosystème et par semaine (le lundi) ; les montées majeures sont
+# ignorées ici et se traitent à part, une à la fois, avec leur propre plan (D-09). Les PR de
+# sécurité de Dependabot (réglage « Dependabot security updates » du dépôt) restent
+# individuelles et prioritaires. Aucune fusion ni aucun déploiement automatiques : chaque PR
+# passe la CI du dépôt et une revue humaine.
 version: 2
 registries:
   # Paquets @forestar-be/* (GitHub Packages) : jeton en lecture seule,
@@ -16,16 +17,30 @@ updates:
     directory: /
     schedule:
       interval: weekly
-    open-pull-requests-limit: 0
-    labels: [security]
-    commit-message:
-      prefix: fix(security)
+      day: monday
     registries: [forestar-github-packages]
+    open-pull-requests-limit: 5
+    labels: [dependencies]
+    commit-message:
+      prefix: chore(deps)
+    groups:
+      correctifs-et-mineures:
+        update-types: [patch, minor]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
-    open-pull-requests-limit: 0
-    labels: [security]
+      day: monday
+    open-pull-requests-limit: 5
+    labels: [dependencies]
     commit-message:
-      prefix: fix(security)
+      prefix: chore(deps)
+    groups:
+      correctifs-et-mineures:
+        update-types: [patch, minor]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
